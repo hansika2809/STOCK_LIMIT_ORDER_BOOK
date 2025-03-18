@@ -29,8 +29,6 @@ class Order(models.Model):
     price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     timestamp = models.DateTimeField(auto_now_add=True)
     is_matched = models.BooleanField(default=False)
- 
-
     is_ioc = models.BooleanField(default=False)
 
 class Trade(models.Model):
@@ -41,7 +39,7 @@ class Trade(models.Model):
     timestamp = models.DateTimeField(auto_now_add=True)
 
 
-class Stoploss_Order(models.Model):
+class Stoplossorder(models.Model):
     ORDER_TYPE_CHOICES = [
         ('BUY', 'Buy'),
         ('SELL', 'Sell'),
@@ -62,3 +60,4 @@ class Stoploss_Order(models.Model):
     timestamp = models.DateTimeField(auto_now_add=True)
     is_matched = models.BooleanField(default=False)
     is_ioc = models.BooleanField(default=False)
+    
