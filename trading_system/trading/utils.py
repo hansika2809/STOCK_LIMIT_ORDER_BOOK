@@ -1,9 +1,11 @@
 from django.db import transaction
 from django.utils import timezone
-from .models import Order, Trade
+from .models import Order, Trade,Stoplossorder
+
 
 def match_order(new_order):
     print("match")
+    closing_price= None
     # Begin a transaction to ensure atomicity
     with transaction.atomic():
         # For a BUY limit order, we are looking for SELL orders at the same price or lower
@@ -58,6 +60,8 @@ def match_order(new_order):
                     timestamp=timezone.now()
                 )
                 
+                #changes:
+                closing_price = opposite_order.price
                 # Update quantities
                 executed_quantity += match_quantity
                 new_order.quantity -= match_quantity
@@ -113,7 +117,8 @@ def match_order(new_order):
                     price=match_price,
                     timestamp=timezone.now()
                 )
-
+                #changes
+                closing_price = match_price
                 # Update the quantities of the matched orders
                 remaining_quantity -= match_quantity
                 opposite_order.quantity -= match_quantity
@@ -134,6 +139,59 @@ def match_order(new_order):
                 if new_order.quantity == 0:
                     new_order.is_matched = True
                     new_order.save()
+                    
+            stop_loss_buy_orders = Stoplossorder.objects.filter(order_type='BUY').order_by('target_price')
+            stop_loss_sell_orders= Stoplossorder.objects.filter(order_type='SELL').order_by('-target_price')
+            
+            if closing_price is not None:
+                # Process BY stop-loss orders
+                for buy_order in stop_loss_buy_orders:
+                    if buy_order.target_price <= closing_price:
+                        if buy_order.order_mode=="MARKET":
+                            best_ask_response = Order.objects.filter(order_type="SELL", is_matched=False).order_by('price').values('price', 'quantity').first()
+                            best_ask_data = best_ask_response
+                            price = best_ask_data['price']
+                        else:
+                            price=buy_order.price
+                            
+                        new_order = Order(
+                            user=buy_order.user,
+                            order_type=buy_order.order_type,
+                            order_mode=buy_order.order_mode,  # Assuming stop-loss orders are treated as limit orders
+                            quantity=buy_order.quantity,
+                            price=price,  # Use target_price as the price for the order
+                            disclosed=buy_order.disclosed,  # Copy disclosed quantity if it exists
+                            timestamp=timezone.now(),
+                            is_matched=False  # Mark as unmatched initially
+                        )
+                        new_order.save()
+                        match_order(new_order)
+                        buy_order.delete()
+                        
+                for sell_order in stop_loss_sell_orders:
+                    if sell_order.target_price >= closing_price:
+                             # Move the order to the main Order table
+                            if buy_order.order_mode=="MARKET":
+                                best_ask_response = Order.objects.filter(order_type="BUY", is_matched=False).order_by('-price').values('price', 'quantity').first()
+                                best_ask_data = best_ask_response
+                                price = best_ask_data['price']
+                            else:
+                                price=sell_order
+                                 # Move the order to the main Order table
+                            new_order = Order(
+                                user=sell_order.user,
+                                order_type=sell_order.order_type,
+                                order_mode=sell_order.order_mode,  # Assuming stop-loss orders are treated as limit orders
+                                quantity=sell_order.quantity,
+                                price=price,  # Use target_price as the price for the order
+                                disclosed=sell_order.disclosed if hasattr(sell_order, 'disclosed') else 0,  # Copy disclosed quantity if it exists
+                                timestamp=timezone.now(),
+                                is_matched=False  # Mark as unmatched initially
+                            ) 
+                            new_order.save()
+                            match_order(new_order)
+                            sell_order.delete()   
+            
 
             # If the new order is partially matched, update its quantity and status
             if new_order.quantity > 0:
@@ -145,11 +203,14 @@ def match_order(new_order):
             # Ensure that any remaining unmatched orders are still available for future matches
             new_order.timestamp = timezone.now()
             new_order.save()
+            
+            
         else:
             remaining_quantity=new_order.quantity
             complete_order=False
             # while(remaining_quantity>0):
             try:
+                closing_price=None
                 for opposite_order in opposite_orders:
                     if(remaining_quantity<=0):
                         complete_order=True
@@ -163,6 +224,9 @@ def match_order(new_order):
                             price=opposite_order.price,
                             timestamp=timezone.now()
                         )
+                        #changes:
+                        closing_price = opposite_order.price
+                        
                         remaining_quantity-=match_quantity
                         opposite_order.quantity -= match_quantity
                         new_order.quantity -= match_quantity
@@ -181,6 +245,9 @@ def match_order(new_order):
                             price=opposite_order.price,
                             timestamp=timezone.now()
                         )
+                        #changes:
+                        closing_price = opposite_order.price
+                        
                         remaining_quantity-=match_quantity
                         opposite_order.quantity -= match_quantity
                         new_order.quantity -= match_quantity
@@ -191,8 +258,69 @@ def match_order(new_order):
                         new_order.is_matched=True
                         opposite_order.save()
                         new_order.save()
+                print(closing_price)
+                
+                stop_loss_buy_orders =  Stoplossorder.objects.filter(order_type='BUY').order_by('target_price')
+                stop_loss_sell_orders = Stoplossorder.objects.filter(order_type='SELL').order_by('-target_price')
+                
+                if closing_price is not None:
+                    for buy_order in stop_loss_buy_orders:
+                        if buy_order.target_price <= closing_price:
+                            if buy_order.order_mode=="MARKET":
+                                best_ask_response = Order.objects.filter(order_type="SELL", is_matched=False).order_by('price').values('price', 'quantity').first()
+                                best_ask_data = best_ask_response
+                                price = best_ask_data['price']
+                            else:
+                                price=buy_order
+                    # Move the order to the main Order table
+                            new_order = Order(
+                                user=buy_order.user,
+                                order_type=buy_order.order_type,
+                                order_mode=buy_order.order_mode,  # Assuming stop-loss orders are treated as limit orders
+                                quantity=buy_order.quantity,
+                                price=price,  # Use target_price as the price for the order
+                                disclosed=buy_order.disclosed,  # Copy disclosed quantity if it exists
+                                timestamp=timezone.now(),
+                                is_matched=False  # Mark as unmatched initially
+                            )
+                            new_order.save()
+                            match_order(new_order)
+                            buy_order.delete()
+                            
+                    for sell_order in stop_loss_sell_orders:
+                        if sell_order.target_price >= closing_price:
+                            if buy_order.order_mode=="MARKET":
+                                best_ask_response = Order.objects.filter(order_type="BUY", is_matched=False).order_by('-price').values('price', 'quantity').first()
+                                best_ask_data = best_ask_response
+                                price = best_ask_data['price']
+                            else:
+                                price=sell_order
+                                 # Move the order to the main Order table
+                            new_order = Order(
+                                user=sell_order.user,
+                                order_type=sell_order.order_type,
+                                order_mode=sell_order.order_mode,  # Assuming stop-loss orders are treated as limit orders
+                                quantity=sell_order.quantity,
+                                price=price,  # Use target_price as the price for the order
+                                disclosed=sell_order.disclosed if hasattr(sell_order, 'disclosed') else 0,  # Copy disclosed quantity if it exists
+                                timestamp=timezone.now(),
+                                is_matched=False  # Mark as unmatched initially
+                            )
+                            # Delete    
+                            # the order from the stop-loss table
+                            new_order.save()
+                            match_order(new_order)
+                            sell_order.delete()
+                
+                
+                        
+                        
+                        
             except Exception as e:
                 print('Some Error Occured')
+
+
+            
             
             if(complete_order==False):
                 #the leftover quantity is converted to 0
@@ -201,6 +329,9 @@ def match_order(new_order):
                 new_order.is_matched=True
                 new_order.save()
                 print("Incomplete order Placed")
+                
+    
+    
 
                
                 
