@@ -1,5 +1,5 @@
 from django.shortcuts import render, redirect
-from .models import User, Order, Trade, Stoploss_Order
+from .models import User, Order, Trade, Stoplossorder
 from django.db.models import Q
 from django.db import transaction
 from django.contrib.auth.decorators import login_required
@@ -36,6 +36,110 @@ def get_best_bid(request):
         return JsonResponse({'best_bid': best_bid})
     return JsonResponse({'best_bid': None})
 
+# @login_required  # Ensure the user is logged in before accessing this view
+# def home(request):
+#     user = request.user  # Get the logged-in user
+#     user, created = User.objects.get_or_create(username=user)
+
+#     if request.method == "POST":
+#         order_type = request.POST.get('order_type')
+#         order_mode = request.POST.get('order_mode')
+#         quantity = int(request.POST.get('quantity'))
+#         disclosed = int(request.POST.get('disclosed_quantity'))
+#         stoploss_order =  request.POST.get('Stoploss_order')
+#         target_price = request.POST.get('Target_price')
+#         is_ioc=request.POST.get('is_ioc')=='True'
+
+#         price = None
+#         end_time=request.POST.get('end_time')
+
+#         if disclosed==0:
+#             disclosed=quantity
+
+#         try:
+#             if order_mode == "LIMIT":
+#                 price = float(request.POST.get('price', 0))  # Default to 0 if no price is provided
+
+#             elif order_mode == "MARKET":
+#                 if order_type == "BUY":
+#                     # Fetch the JSON response from the best ask view
+#                     best_ask_response = fetch_best_ask()
+#                     best_ask_data=best_ask_response
+#                     price = best_ask_data['price']
+
+#                 elif order_type == "SELL":
+#                     # Fetch the JSON response from the best bid view
+#                     best_bid_response = fetch_best_bid()
+#                     best_bid_data=best_bid_response
+#                     price = best_bid_data['price']
+
+#                 if price is None:
+#                     return render(request, 'trading/home.html', {'error': 'Unable to fetch market price for the order type.'})
+#                     # Create and save the new order
+
+#             if disclosed>quantity:
+#                 disclosed=quantity
+
+#             if(stoploss_order=='NO'):
+#                     # Save or process the order here
+#                 new_order = Order(
+#                     order_type=order_type,
+#                     order_mode=order_mode,
+#                     quantity=quantity,
+#                     disclosed=disclosed,
+#                     price=price,
+#                     is_matched=False,
+#                     is_ioc=is_ioc,
+#                     user=user  # Ensure the order is associated with the logged-in user
+#                 )
+
+#                 if disclosed < 0.1 * quantity:  # disclosed_quantity should not be > 10% of quantity
+#                     messages.error(request, "Disclosed Quantity cannot be less than 10% greater than Quantity.")
+
+#                 else:
+#                     # Proceed with saving the order or further logic
+#                     messages.success(request, "Order placed successfully!")
+#                     new_order.save()
+#                     print("call1")
+#                     if(not is_ioc):
+#                         match_order(new_order)
+#                     messages.success(request, 'Your order has been placed successfully!')
+#                     return redirect('/home')
+
+#             else:
+#                 new_order = Stoplossorder (
+#                     order_type=order_type,
+#                     order_mode=order_mode,
+#                     quantity=quantity,
+#                     disclosed=disclosed,
+#                     target_price=target_price,
+#                     price=price,
+#                     is_matched=False,
+#                     is_ioc=is_ioc,
+#                     user=user
+#                 )
+
+#                 if disclosed < 0.1 * quantity:  # disclosed_quantity should not be > 10% of quantity
+#                     messages.error(request, "Disclosed Quantity cannot be less than 10% greater than Quantity.")
+
+#                 else:
+#                     # Proceed with saving the order or further logic
+#                     messages.success(request, "Stoploss Order placed successfully!")
+#                     new_order.save()
+#                     messages.success(request, 'Your Stoploss order has been placed successfully!')
+#                     return redirect('/home')
+
+
+#         except Exception as e:
+#             render(request, 'trading/home.html', {'error': 'Unable to fetch market price for the order type.'})
+        
+
+
+#     # Fetch orders associated with the user
+#     orders = Order.objects.filter(user=user)  # Filter orders by the logged-in user
+
+#     return render(request, 'trading/home.html', {'user': user, 'orders': orders})
+
 @login_required  # Ensure the user is logged in before accessing this view
 def home(request):
     user = request.user  # Get the logged-in user
@@ -46,15 +150,15 @@ def home(request):
         order_mode = request.POST.get('order_mode')
         quantity = int(request.POST.get('quantity'))
         disclosed = int(request.POST.get('disclosed_quantity'))
-        stoploss_order =  request.POST.get('Stoploss_order')
+        stoploss_order = request.POST.get('Stoploss_order')
         target_price = request.POST.get('Target_price')
-        is_ioc=request.POST.get('is_ioc')=='True'
+        is_ioc = request.POST.get('is_ioc') == 'True'
 
         price = None
-        end_time=request.POST.get('end_time')
+        end_time = request.POST.get('end_time')
 
-        if disclosed==0:
-            disclosed=quantity
+        if disclosed == 0:
+            disclosed = quantity
 
         try:
             if order_mode == "LIMIT":
@@ -64,24 +168,23 @@ def home(request):
                 if order_type == "BUY":
                     # Fetch the JSON response from the best ask view
                     best_ask_response = fetch_best_ask()
-                    best_ask_data=best_ask_response
-                    price = best_ask_data['price']
+                    best_ask_data = best_ask_response
+                    price = float(best_ask_data['price'])
 
                 elif order_type == "SELL":
                     # Fetch the JSON response from the best bid view
                     best_bid_response = fetch_best_bid()
-                    best_bid_data=best_bid_response
-                    price = best_bid_data['price']
+                    best_bid_data = best_bid_response
+                    price = float(best_bid_data['price'])
 
                 if price is None:
                     return render(request, 'trading/home.html', {'error': 'Unable to fetch market price for the order type.'})
-                    # Create and save the new order
 
-            if disclosed>quantity:
-                disclosed=quantity
+            if disclosed > quantity:
+                disclosed = quantity
 
-            if(stoploss_order=='NO'):
-                    # Save or process the order here
+            if stoploss_order == 'NO':
+                # Save or process the order here
                 new_order = Order(
                     order_type=order_type,
                     order_mode=order_mode,
@@ -93,54 +196,94 @@ def home(request):
                     user=user  # Ensure the order is associated with the logged-in user
                 )
 
-                if disclosed < 0.1 * quantity:  # disclosed_quantity should not be > 10% of quantity
+                if disclosed < 0.1 * quantity:
                     messages.error(request, "Disclosed Quantity cannot be less than 10% greater than Quantity.")
-
                 else:
-                    # Proceed with saving the order or further logic
                     messages.success(request, "Order placed successfully!")
                     new_order.save()
-                    print("call1")
-                    if(not is_ioc):
+                    if not is_ioc:
                         match_order(new_order)
                     messages.success(request, 'Your order has been placed successfully!')
                     return redirect('/home')
 
             else:
-                new_order = Stoploss_Order (
-                    order_type=order_type,
-                    order_mode=order_mode,
-                    quantity=quantity,
-                    disclosed=disclosed,
-                    target_price=target_price,
-                    price=price,
-                    is_matched=False,
-                    is_ioc=is_ioc,
-                    user=user
-                )
+                latest_trade = Trade.objects.latest('timestamp')
+                current_price = latest_trade.price
+                
+                if(order_type == "BUY" and current_price>target_price):
+                        # Save or process the order here
+                        new_order = Order(
+                            order_type=order_type,
+                            order_mode=order_mode,
+                            quantity=quantity,
+                            disclosed=disclosed,
+                            price=price,
+                            is_matched=False,
+                            is_ioc=is_ioc,
+                            user=user  # Ensure the order is associated with the logged-in user
+                        )
 
-                if disclosed < 0.1 * quantity:  # disclosed_quantity should not be > 10% of quantity
-                    messages.error(request, "Disclosed Quantity cannot be less than 10% greater than Quantity.")
+                        if disclosed < 0.1 * quantity:
+                            messages.error(request, "Disclosed Quantity cannot be less than 10% greater than Quantity.")
+                        else:
+                            messages.success(request, "Stoploss Order placed successfully!")
+                            new_order.save()
+                            if not is_ioc:
+                                match_order(new_order)
+                            messages.success(request, 'Your Stoploss order has been placed successfully!')
+                            return redirect('/home')
+                        
+                elif(order_type == "SELL" and current_price<target_price):
+                        new_order = Order(
+                            order_type=order_type,
+                            order_mode=order_mode,
+                            quantity=quantity,
+                            disclosed=disclosed,
+                            price=price,
+                            is_matched=False,
+                            is_ioc=is_ioc,
+                            user=user  # Ensure the order is associated with the logged-in user
+                        )
 
-                else:
-                    # Proceed with saving the order or further logic
-                    messages.success(request, "Stoploss Order placed successfully!")
-                    new_order.save()
-                    messages.success(request, 'Your Stoploss order has been placed successfully!')
-                    return redirect('/home')
+                        if disclosed < 0.1 * quantity:
+                            messages.error(request, "Disclosed Quantity cannot be less than 10% greater than Quantity.")
+                        else:
+                            messages.success(request, "stoploss Order placed successfully!")
+                            new_order.save()
+                            if not is_ioc:
+                                match_order(new_order)
+                            messages.success(request, 'Your stoplossorder has been placed successfully!')
+                            return redirect('/home')
+                else:   
+                    
+                    new_stoploss_order = Stoplossorder(
+                        order_type=order_type,
+                        order_mode=order_mode,
+                        quantity=quantity,
+                        disclosed=disclosed,
+                        target_price=target_price,
+                        price=price,
+                        is_matched=False,
+                        is_ioc=is_ioc,
+                        user=user
+                    )
 
-
-        except Exception as e:
-            render(request, 'trading/home.html', {'error': 'Unable to fetch market price for the order type.'})
+                    if disclosed < 0.1 * quantity:
+                        messages.error(request, "Disclosed Quantity cannot be less than 10% greater than Quantity.")
+                    else:
+                        messages.success(request, "Stoploss Order placed successfully!")
+                        new_stoploss_order.save()
+                        messages.success(request, 'Your Stoploss order has been placed successfully!')
+                        return redirect('/home')
         
-
+        except Exception as e:
+            return render(request, 'trading/home.html', {'error': 'An error occurred while processing your order.'})
 
     # Fetch orders associated with the user
-    orders = Order.objects.filter(user=user)  # Filter orders by the logged-in user
+    orders = Order.objects.filter(user=user)
+    stoploss_orders = Stoplossorder.objects.filter(user=user)  # Fetch stop-loss orders separately
 
-    return render(request, 'trading/home.html', {'user': user, 'orders': orders})
-
-
+    return render(request, 'trading/home.html', {'user': user, 'orders': orders, 'stoploss': stoploss_orders})
 
 
 from django.shortcuts import render
@@ -265,35 +408,5 @@ def get_recent_trades(request):
         )  # Adjust fields and ordering as needed
         return JsonResponse({'trades': list(recent_trades)})
 
-import logging
-logger = logging.getLogger(__name__)
-@login_required
-def cancel_order(request):
-    if request.method == 'POST':
-        try:
-            logger.debug(f"Cancellation request received: {request.body}")
-            # Get current user using the same pattern as order placement
-            user = User.objects.get(username=request.user.username)
-            
-            data = json.loads(request.body)
-            order_id = data.get('order_id')
-            
-            with transaction.atomic():
-                order = Order.objects.get(
-                    id=order_id,
-                    user=user,
-                    is_matched=False
-                )
-                order.delete()
-            
-            return JsonResponse({'success': True, 'message': 'Order cancelled successfully'})
-        
-        except User.DoesNotExist:
-            return JsonResponse({'success': False, 'message': 'User authentication failed'}, status=401)
-        except Order.DoesNotExist:
-            return JsonResponse({'success': False, 'message': 'Order not found or already matched'}, status=404)
-        except json.JSONDecodeError:
-            return JsonResponse({'success': False, 'message': 'Invalid request format'}, status=400)
-        except Exception as e:
-            logger.error(f"Cancel order error: {str(e)}")
-            return JsonResponse({'success': False, 'message': str(e)}, status=500)
+
+
